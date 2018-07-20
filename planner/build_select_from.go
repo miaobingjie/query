@@ -450,7 +450,19 @@ func (this *builder) VisitUnnest(node *algebra.Unnest) (interface{}, error) {
 
 	_, found := this.coveredUnnests[node]
 	if !found {
-		unnest := plan.NewUnnest(node)
+		var filter expression.Expression
+		unnestKeyspace, _ := this.baseKeyspaces[node.Alias()]
+		for _, fl := range unnestKeyspace.filters {
+			if fl.isJoin() {
+				continue
+			}
+			if filter == nil {
+				filter = fl.fltrExpr
+			} else {
+				filter = expression.NewAnd(filter, fl.fltrExpr)
+			}
+		}
+		unnest := plan.NewUnnest(node, filter)
 		this.subChildren = append(this.subChildren, unnest)
 		parallel := plan.NewParallel(plan.NewSequence(this.subChildren...), this.maxParallelism)
 		this.children = append(this.children, parallel)

@@ -70,14 +70,28 @@ func (this *Unnest) processItem(item value.AnnotatedValue, context *Context) boo
 	// Attach and send
 	for i, act := range acts {
 		var av value.AnnotatedValue
+		actv := value.NewAnnotatedValue(act)
+		actv.SetAttachment("unnest_position", i)
+
+		if this.plan.Filter() != nil {
+			tv := value.NewAnnotatedValue(value.SMALL_OBJECT_VALUE)
+			tv.SetField(this.plan.Alias(), actv)
+			fv, err := this.plan.Filter().Evaluate(tv, context)
+			if err != nil {
+				context.Error(errors.NewEvaluationError(err, "UNNEST filter"))
+				return false
+			}
+
+			if !fv.Truth() {
+				continue
+			}
+		}
+
 		if i < len(acts)-1 {
 			av = value.NewAnnotatedValue(item.Copy())
 		} else {
 			av = item
 		}
-
-		actv := value.NewAnnotatedValue(act)
-		actv.SetAttachment("unnest_position", i)
 		av.SetField(this.plan.Alias(), actv)
 
 		if !this.sendItem(av) {

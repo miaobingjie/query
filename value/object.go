@@ -362,7 +362,7 @@ Return a successor object.
 */
 func (this objectValue) Successor() Value {
 	if len(this) == 0 {
-		return _SMALL_OBJECT_VALUE
+		return SMALL_OBJECT_VALUE
 	}
 
 	s := copyMap(this, self)
@@ -452,7 +452,7 @@ func (this objectValue) unwrap() Value {
 	return this
 }
 
-var _SMALL_OBJECT_VALUE = objectValue(map[string]interface{}{"": nil})
+var SMALL_OBJECT_VALUE = objectValue(map[string]interface{}{"": nil})
 
 func objectEquals(obj1, obj2 map[string]interface{}) Value {
 	if len(obj1) != len(obj2) {

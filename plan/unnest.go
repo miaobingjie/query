@@ -19,14 +19,16 @@ import (
 
 type Unnest struct {
 	readonly
-	term  *algebra.Unnest
-	alias string
+	term   *algebra.Unnest
+	alias  string
+	filter expression.Expression
 }
 
-func NewUnnest(term *algebra.Unnest) *Unnest {
+func NewUnnest(term *algebra.Unnest, filter expression.Expression) *Unnest {
 	return &Unnest{
-		term:  term,
-		alias: term.Alias(),
+		term:   term,
+		alias:  term.Alias(),
+		filter: filter,
 	}
 }
 
@@ -46,6 +48,10 @@ func (this *Unnest) Alias() string {
 	return this.alias
 }
 
+func (this *Unnest) Filter() expression.Expression {
+	return this.filter
+}
+
 func (this *Unnest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(this.MarshalBase(nil))
 }
@@ -61,6 +67,9 @@ func (this *Unnest) MarshalBase(f func(map[string]interface{})) map[string]inter
 	if this.alias != "" {
 		r["as"] = this.alias
 	}
+	if this.filter != nil {
+		r["filter"] = expression.NewStringer().Visit(this.filter)
+	}
 
 	if f != nil {
 		f(r)
@@ -70,12 +79,13 @@ func (this *Unnest) MarshalBase(f func(map[string]interface{})) map[string]inter
 
 func (this *Unnest) UnmarshalJSON(body []byte) error {
 	var _unmarshalled struct {
-		_     string `json:"#operator"`
-		Outer bool   `json:"outer"`
-		Expr  string `json:"expr"`
-		As    string `json:"as"`
+		_      string `json:"#operator"`
+		Outer  bool   `json:"outer"`
+		Expr   string `json:"expr"`
+		As     string `json:"as"`
+		Filter string `json:"filter"`
 	}
-	var expr expression.Expression
+	var expr, filter expression.Expression
 
 	err := json.Unmarshal(body, &_unmarshalled)
 	if err != nil {
@@ -89,7 +99,15 @@ func (this *Unnest) UnmarshalJSON(body []byte) error {
 		}
 	}
 
+	if _unmarshalled.Filter != "" {
+		filter, err = parser.Parse(_unmarshalled.Filter)
+		if err != nil {
+			return err
+		}
+	}
+
 	this.term = algebra.NewUnnest(nil, _unmarshalled.Outer, expr, _unmarshalled.As)
 	this.alias = _unmarshalled.As
+	this.filter = filter
 	return err
 }
