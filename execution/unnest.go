@@ -74,7 +74,7 @@ func (this *Unnest) processItem(item value.AnnotatedValue, context *Context) boo
 		actv.SetAttachment("unnest_position", i)
 
 		if this.plan.Filter() != nil {
-			tv := value.NewAnnotatedValue(value.SMALL_OBJECT_VALUE)
+			tv := value.NewAnnotatedValue(value.SMALL_OBJECT_VALUE.Copy())
 			tv.SetField(this.plan.Alias(), actv)
 			fv, err := this.plan.Filter().Evaluate(tv, context)
 			if err != nil {
