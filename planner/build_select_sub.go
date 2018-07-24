@@ -78,6 +78,10 @@ func (this *builder) VisitSubselect(node *algebra.Subselect) (interface{}, error
 		this.where = node.Where()
 	}
 
+	if this.where != nil {
+		this.filter = this.where.Copy()
+	}
+
 	// Infer WHERE clause from UNNEST
 	if node.From() != nil {
 		this.inferUnnestPredicates(node.From())
@@ -210,7 +214,7 @@ func (this *builder) VisitSubselect(node *algebra.Subselect) (interface{}, error
 	if this.countScan == nil {
 		// Add Let and Filter only when group/aggregates are not pushed
 		if this.group == nil {
-			this.addLetAndPredicate(node.Let(), node.Where())
+			this.addLetAndPredicate(node.Let(), this.filter)
 		}
 
 		if group != nil {

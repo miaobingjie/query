@@ -461,6 +461,10 @@ func (this *builder) VisitUnnest(node *algebra.Unnest) (interface{}, error) {
 			} else {
 				filter = expression.NewAnd(filter, fl.fltrExpr)
 			}
+			this.filter, err = RemoveExpr(this.filter, fl.fltrExpr)
+			if err != nil {
+				return nil, err
+			}
 		}
 		unnest := plan.NewUnnest(node, filter)
 		this.subChildren = append(this.subChildren, unnest)
