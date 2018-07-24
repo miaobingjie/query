@@ -16,7 +16,7 @@ import (
 // Remove an sub-expression from an expression
 func RemoveExpr(expr, removeExpr expression.Expression) (expression.Expression, error) {
 	if expr == nil || removeExpr == nil {
-		return nil, nil
+		return expr, nil
 	}
 
 	remover := newExprRemover(removeExpr)
