@@ -78,8 +78,8 @@ func (this *builder) VisitSubselect(node *algebra.Subselect) (interface{}, error
 		this.where = node.Where()
 	}
 
-	if this.where != nil {
-		this.filter = this.where.Copy()
+	if node.Where() != nil {
+		this.filter = node.Where().Copy()
 	}
 
 	// Infer WHERE clause from UNNEST
