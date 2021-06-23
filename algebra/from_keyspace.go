@@ -28,6 +28,8 @@ const (
 	TERM_IN_CORR_SUBQ                // inside a correlated subquery
 )
 
+const TERM_JOIN_PROPS = (TERM_ANSI_JOIN | TERM_ANSI_NEST | TERM_PRIMARY_JOIN)
+
 /*
 Represents the Keyspace (bucket) term in the FROM clause.  The
 keyspace can be prefixed with an optional namespace (pool).
@@ -506,6 +508,22 @@ Return whether correlated
 */
 func (this *KeyspaceTerm) IsCorrelated() bool {
 	return false
+}
+
+/*
+Save join property
+*/
+func (this *KeyspaceTerm) SaveJoinProps() uint32 {
+	joinProps := (this.property & TERM_JOIN_PROPS)
+	this.property &^= TERM_JOIN_PROPS
+	return joinProps
+}
+
+/*
+Restore join property
+*/
+func (this *KeyspaceTerm) RestoreJoinProps(joinProps uint32) {
+	this.property |= joinProps
 }
 
 /*

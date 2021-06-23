@@ -75,6 +75,8 @@ type SimpleFromTerm interface {
 	SetJoinHint(joinHint JoinHint)
 	PreferHash() bool
 	PreferNL() bool
+	SaveJoinProps() uint32
+	RestoreJoinProps(joinProps uint32)
 }
 
 type JoinTerm interface {
