@@ -294,6 +294,22 @@ func (this *ExpressionTerm) SetAnsiNest() {
 }
 
 /*
+Save join property
+*/
+func (this *ExpressionTerm) SaveJoinProps() uint32 {
+	joinProps := (this.property & TERM_JOIN_PROPS)
+	this.property &^= TERM_JOIN_PROPS
+	return joinProps
+}
+
+/*
+Restore join property
+*/
+func (this *ExpressionTerm) RestoreJoinProps(joinProps uint32) {
+	this.property |= joinProps
+}
+
+/*
 Marshals input ExpressionTerm.
 */
 func (this *ExpressionTerm) MarshalJSON() ([]byte, error) {
