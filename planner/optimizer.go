@@ -31,7 +31,7 @@ type Builder interface {
 	AddOuterOnclause(onclause expression.Expression,
 		baseKeyspaces map[string]*base.BaseKeyspace, keyspaceNames map[string]string) error
 	BuildScan(node algebra.SimpleFromTerm, order bool) (
-		[]plan.Operator, []plan.Operator, []plan.CoveringOperator, expression.Expression, error)
+		[]plan.Operator, []plan.Operator, []plan.CoveringOperator, map[*algebra.Unnest]bool, expression.Expression, error)
 	BuildNLJoin(node *algebra.AnsiJoin, outerAliases []string,
 		outerPlan, outerSubPlan []plan.Operator, outerCoveringScans []plan.CoveringOperator,
 		outerFilter expression.Expression) (
@@ -85,10 +85,11 @@ func (this *builder) AddOuterOnclause(onclause expression.Expression,
 }
 
 func (this *builder) BuildScan(node algebra.SimpleFromTerm, order bool) (
-	[]plan.Operator, []plan.Operator, []plan.CoveringOperator, expression.Expression, error) {
+	[]plan.Operator, []plan.Operator, []plan.CoveringOperator, map[*algebra.Unnest]bool, expression.Expression, error) {
 	children := this.children
 	subChildren := this.subChildren
 	coveringScans := this.coveringScans
+	coveredUnnests := this.coveredUnnests
 	filter := this.filter
 	countScan := this.countScan
 	orderScan := this.orderScan
@@ -100,6 +101,7 @@ func (this *builder) BuildScan(node algebra.SimpleFromTerm, order bool) (
 		this.children = children
 		this.subChildren = subChildren
 		this.coveringScans = coveringScans
+		this.coveredUnnests = coveredUnnests
 		this.filter = filter
 		this.countScan = countScan
 		this.orderScan = orderScan
@@ -112,6 +114,7 @@ func (this *builder) BuildScan(node algebra.SimpleFromTerm, order bool) (
 	this.children = make([]plan.Operator, 0, 16)
 	this.subChildren = make([]plan.Operator, 0, 16)
 	this.coveringScans = nil
+	this.coveredUnnests = nil
 	this.countScan = nil
 	this.orderScan = nil
 	this.limit = nil
@@ -120,7 +123,7 @@ func (this *builder) BuildScan(node algebra.SimpleFromTerm, order bool) (
 
 	if order {
 		if this.order == nil {
-			return nil, nil, nil, nil, nil
+			return nil, nil, nil, nil, nil, nil
 		}
 		this.setBuilderFlag(BUILDER_CHK_INDEX_ORDER)
 		defer this.unsetBuilderFlag(BUILDER_CHK_INDEX_ORDER)
@@ -130,17 +133,17 @@ func (this *builder) BuildScan(node algebra.SimpleFromTerm, order bool) (
 
 	_, err := node.Accept(this)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	// if costing is not available, return nil plan
 	if this.lastOp != nil &&
 		(this.lastOp.Cost() <= 0.0 || this.lastOp.Cardinality() <= 0.0 ||
 			this.lastOp.Size() <= 0 || this.lastOp.FrCost() <= 0.0) {
-		return nil, nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil
 	}
 
-	return this.children, this.subChildren, this.coveringScans, this.filter, nil
+	return this.children, this.subChildren, this.coveringScans, this.coveredUnnests, this.filter, nil
 }
 
 func (this *builder) BuildNLJoin(join *algebra.AnsiJoin, outerAliases []string,
