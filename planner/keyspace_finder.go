@@ -176,11 +176,10 @@ func (this *keyspaceFinder) VisitUnnest(node *algebra.Unnest) (interface{}, erro
 	}
 
 	ks, _ := this.baseKeyspaces[node.Alias()]
+	ks.SetUnnest()
 	if node.Outer() {
-		ks.SetOuterUnnest()
 		ks.SetOuterlevel(this.outerlevel + 1)
 	} else {
-		ks.SetInnerUnnest()
 		for _, unnest := range this.unnestDepends {
 			if node.Expression().DependsOn(unnest) {
 				ks.SetPrimaryUnnest()

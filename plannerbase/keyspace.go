@@ -22,8 +22,7 @@ const (
 	KS_HAS_DOC_COUNT              // docCount retrieved for keyspace
 	KS_ANSI_JOIN                  // right-hand side of ANSI JOIN
 	KS_ANSI_NEST                  // right-hand side of ANSI NEST
-	KS_OUTER_UNNEST               // outer unnest
-	KS_INNER_UNNEST               // inner unnest
+	KS_IS_UNNEST                  // unnest
 )
 
 type BaseKeyspace struct {
@@ -104,24 +103,12 @@ func (this *BaseKeyspace) SetPrimaryUnnest() {
 	this.ksFlags |= KS_PRIMARY_UNNEST
 }
 
-func (this *BaseKeyspace) IsOuterUnnest() bool {
-	return (this.ksFlags & KS_OUTER_UNNEST) != 0
-}
-
-func (this *BaseKeyspace) SetOuterUnnest() {
-	this.ksFlags |= KS_OUTER_UNNEST
-}
-
-func (this *BaseKeyspace) IsInnerUnnest() bool {
-	return (this.ksFlags & KS_OUTER_UNNEST) != 0
-}
-
-func (this *BaseKeyspace) SetInnerUnnest() {
-	this.ksFlags |= KS_OUTER_UNNEST
-}
-
 func (this *BaseKeyspace) IsUnnest() bool {
-	return (this.ksFlags & (KS_INNER_UNNEST | KS_OUTER_UNNEST)) != 0
+	return (this.ksFlags & KS_IS_UNNEST) != 0
+}
+
+func (this *BaseKeyspace) SetUnnest() {
+	this.ksFlags |= KS_IS_UNNEST
 }
 
 func (this *BaseKeyspace) IsInCorrSubq() bool {
