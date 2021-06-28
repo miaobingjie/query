@@ -572,7 +572,7 @@ func (this *builder) inferUnnestPredicates(from algebra.FromTerm) {
 	unnests = collectInnerUnnestsFromJoinTerm(joinTerm, unnests)
 
 	// Enumerate primary UNNESTs
-	primaryUnnests := collectPrimaryUnnests(from, unnests)
+	primaryUnnests := collectPrimaryUnnests(from.PrimaryTerm(), unnests)
 	if nil != primaryUnnests {
 		defer _UNNEST_POOL.Put(primaryUnnests)
 	}

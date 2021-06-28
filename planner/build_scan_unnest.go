@@ -74,7 +74,7 @@ func (this *builder) buildUnnestScan(node *algebra.KeyspaceTerm, from algebra.Fr
 	unnests = collectInnerUnnestsFromJoinTerm(joinTerm, unnests)
 
 	// Enumerate primary UNNESTs
-	primaryUnnests := collectPrimaryUnnests(from, unnests)
+	primaryUnnests := collectPrimaryUnnests(from.PrimaryTerm(), unnests)
 	if nil != primaryUnnests {
 		defer _UNNEST_POOL.Put(primaryUnnests)
 	}
@@ -235,9 +235,9 @@ func collectInnerUnnestsFromJoinTerm(joinTerm algebra.JoinTerm, buf []*algebra.U
 Enumerate primary UNNESTs.
 False positives are ok.
 */
-func collectPrimaryUnnests(from algebra.FromTerm, unnests []*algebra.Unnest) []*algebra.Unnest {
+func collectPrimaryUnnests(term algebra.SimpleFromTerm, unnests []*algebra.Unnest) []*algebra.Unnest {
 	var buf []*algebra.Unnest
-	primaryAlias := expression.NewIdentifier(from.PrimaryTerm().Alias())
+	primaryAlias := expression.NewIdentifier(term.Alias())
 	for _, u := range unnests {
 		// This test allows false positives, but that's ok
 		if u.Expression().DependsOn(primaryAlias) {
