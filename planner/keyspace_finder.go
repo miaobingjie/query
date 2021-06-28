@@ -182,7 +182,6 @@ func (this *keyspaceFinder) VisitUnnest(node *algebra.Unnest) (interface{}, erro
 	} else {
 		for _, unnest := range this.unnestDepends {
 			if node.Expression().DependsOn(unnest) {
-				ks.SetPrimaryUnnest()
 				this.unnestDepends[node.Alias()] = expression.NewIdentifier(node.Alias())
 				break
 			}
