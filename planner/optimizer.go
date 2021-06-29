@@ -95,7 +95,7 @@ func (this *builder) BuildScan(node algebra.SimpleFromTerm, order bool) (
 	orderScan := this.orderScan
 	lastOp := this.lastOp
 	indexPushDowns := this.storeIndexPushDowns()
-	joinProps := node.SaveJoinProps()
+	joinProps := node.UnsetJoinProps()
 	this.setJoinEnum()
 	defer func() {
 		this.children = children
@@ -107,7 +107,7 @@ func (this *builder) BuildScan(node algebra.SimpleFromTerm, order bool) (
 		this.orderScan = orderScan
 		this.lastOp = lastOp
 		this.restoreIndexPushDowns(indexPushDowns, true)
-		node.RestoreJoinProps(joinProps)
+		node.SetJoinProps(joinProps)
 		this.unsetJoinEnum()
 	}()
 

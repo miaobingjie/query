@@ -196,17 +196,17 @@ func (this *SubqueryTerm) IsCorrelated() bool {
 }
 
 /*
-Save join property
+Unset (and save) join property
 */
-func (this *SubqueryTerm) SaveJoinProps() uint32 {
+func (this *SubqueryTerm) UnsetJoinProps() uint32 {
 	joinProps := (this.property & TERM_JOIN_PROPS)
 	this.property &^= TERM_JOIN_PROPS
 	return joinProps
 }
 
 /*
-Restore join property
+Set join property
 */
-func (this *SubqueryTerm) RestoreJoinProps(joinProps uint32) {
+func (this *SubqueryTerm) SetJoinProps(joinProps uint32) {
 	this.property |= joinProps
 }
