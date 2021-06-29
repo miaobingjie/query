@@ -17,11 +17,12 @@ import (
 const (
 	KS_PLAN_DONE     = 1 << iota // planning is done for this keyspace
 	KS_ONCLAUSE_ONLY             // use ON-clause only for planning
-	KS_IS_UNNEST                 // unnest
+	KS_IS_UNNEST                 // unnest alias
 	KS_IN_CORR_SUBQ              // in correlated subquery
 	KS_HAS_DOC_COUNT             // docCount retrieved for keyspace
 	KS_ANSI_JOIN                 // right-hand side of ANSI JOIN
 	KS_ANSI_NEST                 // right-hand side of ANSI NEST
+	KS_PRIMARY_TERM              // primary term
 )
 
 type BaseKeyspace struct {
@@ -132,6 +133,14 @@ func (this *BaseKeyspace) IsAnsiNest() bool {
 
 func (this *BaseKeyspace) SetAnsiNest() {
 	this.ksFlags |= KS_ANSI_NEST
+}
+
+func (this *BaseKeyspace) IsPrimaryTerm() bool {
+	return (this.ksFlags & KS_PRIMARY_TERM) != 0
+}
+
+func (this *BaseKeyspace) SetPrimaryTerm() {
+	this.ksFlags |= KS_PRIMARY_TERM
 }
 
 func CopyBaseKeyspaces(src map[string]*BaseKeyspace) map[string]*BaseKeyspace {

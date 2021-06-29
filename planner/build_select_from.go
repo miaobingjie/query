@@ -47,9 +47,10 @@ func (this *builder) visitFrom(node *algebra.Subselect, group *algebra.Group,
 		this.pushableOnclause = keyspaceFinder.pushableOnclause
 		this.collectKeyspaceNames()
 
-		if len(keyspaceFinder.unnestDepends) > 1 {
-			primKeyspace, _ := this.baseKeyspaces[primaryTerm.Alias()]
+		primKeyspace, _ := this.baseKeyspaces[primaryTerm.Alias()]
+		primKeyspace.SetPrimaryTerm()
 
+		if len(keyspaceFinder.unnestDepends) > 1 {
 			// MB-38105 gather all unnest aliases for the primary keyspace
 			for a, _ := range keyspaceFinder.unnestDepends {
 				if a == primaryTerm.Alias() {
