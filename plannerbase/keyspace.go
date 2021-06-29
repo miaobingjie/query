@@ -20,8 +20,6 @@ const (
 	KS_IS_UNNEST                 // unnest alias
 	KS_IN_CORR_SUBQ              // in correlated subquery
 	KS_HAS_DOC_COUNT             // docCount retrieved for keyspace
-	KS_ANSI_JOIN                 // right-hand side of ANSI JOIN
-	KS_ANSI_NEST                 // right-hand side of ANSI NEST
 	KS_PRIMARY_TERM              // primary term
 )
 
@@ -119,28 +117,20 @@ func (this *BaseKeyspace) SetHasDocCount() {
 	this.ksFlags |= KS_HAS_DOC_COUNT
 }
 
-func (this *BaseKeyspace) IsAnsiJoin() bool {
-	return (this.ksFlags & KS_ANSI_JOIN) != 0
-}
-
-func (this *BaseKeyspace) SetAnsiJoin() {
-	this.ksFlags |= KS_ANSI_JOIN
-}
-
-func (this *BaseKeyspace) IsAnsiNest() bool {
-	return (this.ksFlags & KS_ANSI_NEST) != 0
-}
-
-func (this *BaseKeyspace) SetAnsiNest() {
-	this.ksFlags |= KS_ANSI_NEST
-}
-
 func (this *BaseKeyspace) IsPrimaryTerm() bool {
 	return (this.ksFlags & KS_PRIMARY_TERM) != 0
 }
 
 func (this *BaseKeyspace) SetPrimaryTerm() {
 	this.ksFlags |= KS_PRIMARY_TERM
+}
+
+func (this *BaseKeyspace) IsAnsiJoin() bool {
+	return this.node != nil && this.node.IsAnsiJoin()
+}
+
+func (this *BaseKeyspace) IsAnsiNest() bool {
+	return this.node != nil && this.node.IsAnsiNest()
 }
 
 func CopyBaseKeyspaces(src map[string]*BaseKeyspace) map[string]*BaseKeyspace {

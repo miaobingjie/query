@@ -43,13 +43,6 @@ func (this *keyspaceFinder) addKeyspaceAlias(alias string, path *algebra.Path,
 	}
 	newBaseKeyspace := base.NewBaseKeyspace(alias, path, node, (1 << len(this.baseKeyspaces)))
 	newBaseKeyspace.SetOuterlevel(this.outerlevel)
-	if node != nil {
-		if node.IsAnsiJoin() {
-			newBaseKeyspace.SetAnsiJoin()
-		} else if node.IsAnsiNest() {
-			newBaseKeyspace.SetAnsiNest()
-		}
-	}
 	this.baseKeyspaces[alias] = newBaseKeyspace
 	this.keyspaceMap[alias] = newBaseKeyspace.Keyspace()
 	return nil
