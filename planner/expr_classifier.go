@@ -19,7 +19,7 @@ import (
 
 // breaks expr on AND boundaries and classify into appropriate keyspaces
 func ClassifyExpr(expr expression.Expression, baseKeyspaces map[string]*base.BaseKeyspace,
-	keyspaceNames map[string]string, isOnclause, doSelec, advisorValidate bool,
+	keyspaceNames map[string]string, isOnclause, outerOnly, doSelec, advisorValidate bool,
 	context *PrepareContext) (value.Value, error) {
 
 	if len(baseKeyspaces) == 0 {
@@ -35,8 +35,8 @@ func ClassifyExpr(expr expression.Expression, baseKeyspaces map[string]*base.Bas
 		}
 	}
 
-	classifier := newExprClassifier(baseKeyspaces, keyspaceNames, isOnclause, doSelec,
-		advisorValidate, context)
+	classifier := newExprClassifier(baseKeyspaces, keyspaceNames, isOnclause, outerOnly,
+		doSelec, advisorValidate, context)
 	_, err := expr.Accept(classifier)
 	if err != nil {
 		return nil, err
@@ -68,6 +68,7 @@ type exprClassifier struct {
 	recursionJoin   bool
 	recurseJoinExpr expression.Expression
 	isOnclause      bool
+	outerOnly       bool
 	nonConstant     bool
 	constant        value.Value
 	doSelec         bool
@@ -76,12 +77,13 @@ type exprClassifier struct {
 }
 
 func newExprClassifier(baseKeyspaces map[string]*base.BaseKeyspace, keyspaceNames map[string]string,
-	isOnclause, doSelec, advisorValidate bool, context *PrepareContext) *exprClassifier {
+	isOnclause, outerOnly, doSelec, advisorValidate bool, context *PrepareContext) *exprClassifier {
 
 	return &exprClassifier{
 		baseKeyspaces:   baseKeyspaces,
 		keyspaceNames:   keyspaceNames,
 		isOnclause:      isOnclause,
+		outerOnly:       outerOnly,
 		doSelec:         doSelec,
 		advisorValidate: advisorValidate,
 		context:         context,
@@ -464,12 +466,23 @@ func (this *exprClassifier) visitDefault(expr expression.Expression) (interface{
 		}
 	}
 
+	optBits := int32(0)
+	if this.doSelec {
+		optBits = getOptBits(this.baseKeyspaces, origKeyspaces)
+	}
+
 	for kspace, _ := range keyspaces {
 		if baseKspace, ok := this.baseKeyspaces[kspace]; ok {
+			// if outerOnly is set, only add filter to keyspaces with outerlevel > 0
+			if this.isOnclause && this.outerOnly && !baseKspace.IsOuter() {
+				continue
+			}
+
 			filter := base.NewFilter(dnfExpr, origExpr, keyspaces, origKeyspaces,
 				this.isOnclause, len(origKeyspaces) > 1)
 			if this.doSelec && !baseKspace.IsUnnest() && baseKspace.DocCount() >= 0 {
 				optFilterSelectivity(filter, this.advisorValidate, this.context)
+				filter.SetOptBits(optBits)
 			}
 			if len(subqueries) > 0 {
 				filter.SetSubq()
@@ -495,6 +508,7 @@ func (this *exprClassifier) visitDefault(expr expression.Expression) (interface{
 							newOrigKeyspaces, this.isOnclause, orIsJoin)
 						if this.doSelec && !baseKspace.IsUnnest() && baseKspace.DocCount() >= 0 {
 							optFilterSelectivity(newFilter, this.advisorValidate, this.context)
+							newFilter.SetOptBits(baseKspace.OptBit())
 						}
 						baseKspace.AddFilter(newFilter)
 					}
@@ -522,7 +536,7 @@ func (this *exprClassifier) extractExpr(or *expression.Or, keyspaceName string) 
 	for _, op := range orTerms.Operands() {
 		baseKeyspaces := base.CopyBaseKeyspaces(this.baseKeyspaces)
 		_, err := ClassifyExpr(op, baseKeyspaces, this.keyspaceNames, this.isOnclause,
-			this.doSelec, this.advisorValidate, this.context)
+			this.outerOnly, this.doSelec, this.advisorValidate, this.context)
 		if err != nil {
 			return nil, nil, false, err
 		}

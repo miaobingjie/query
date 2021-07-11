@@ -352,7 +352,7 @@ func (this *builder) collectPredicates(baseKeyspace *base.BaseKeyspace, keyspace
 				baseKeyspacesCopy := base.CopyBaseKeyspaces(this.baseKeyspaces)
 
 				_, err := ClassifyExpr(op, baseKeyspacesCopy, this.keyspaceNames,
-					ansijoin, this.useCBO, advisorValidate, this.context)
+					ansijoin, false, this.useCBO, advisorValidate, this.context)
 				if err != nil {
 					continue outer
 				}
@@ -374,7 +374,7 @@ func (this *builder) collectPredicates(baseKeyspace *base.BaseKeyspace, keyspace
 			//This is for collecting predicates for build_join_index.
 			baseKeyspacesCopy := base.CopyBaseKeyspaces(this.baseKeyspaces)
 			_, err := ClassifyExpr(pred, baseKeyspacesCopy, this.keyspaceNames,
-				false, this.useCBO, advisorValidate, this.context)
+				false, false, this.useCBO, advisorValidate, this.context)
 			if err != nil {
 				return err
 			}
@@ -438,6 +438,7 @@ func getFilterInfos(filters base.Filters, context *PrepareContext) base.Filters 
 			}
 			fl = base.NewFilter(fltrExpr, origExpr, f.Keyspaces(), f.OrigKeyspaces(),
 				f.IsOnclause(), f.IsJoin())
+			fl.SetOptBits(f.OptBits())
 		} else {
 			fl = f.Copy()
 		}
