@@ -20,7 +20,9 @@ import (
 	"github.com/couchbase/query/value"
 )
 
-func (this *builder) visitFrom(node *algebra.Subselect, group *algebra.Group) error {
+func (this *builder) visitFrom(node *algebra.Subselect, group *algebra.Group,
+	projection *algebra.Projection, indexPushDowns *indexPushDowns) error {
+
 	count, err := this.fastCount(node)
 	if err != nil {
 		return err
@@ -73,7 +75,7 @@ func (this *builder) visitFrom(node *algebra.Subselect, group *algebra.Group) er
 			if this.falseWhereClause() {
 				this.pushableOnclause = nil
 			} else {
-				constant, err := this.processPredicate(this.pushableOnclause, true)
+				constant, err := this.processPredicate(this.pushableOnclause, true, false)
 				if err != nil {
 					return err
 				}
@@ -109,7 +111,7 @@ func (this *builder) visitFrom(node *algebra.Subselect, group *algebra.Group) er
 					this.pushableOnclause = aoj2aij.pushableOnclause
 				}
 
-				_, err = this.processPredicate(aoj2aij.pushableOnclause, true)
+				_, err = this.processPredicate(aoj2aij.pushableOnclause, true, false)
 				if err != nil {
 					return err
 				}
@@ -118,19 +120,44 @@ func (this *builder) visitFrom(node *algebra.Subselect, group *algebra.Group) er
 
 		this.extractKeyspacePredicates(this.where, nil)
 
-		var op plan.Operator
+		var ops, subOps []plan.Operator
+		var coveringOps []plan.CoveringOperator
+		var filter expression.Expression
+		var hasOrder bool
 
-		if this.useCBO && this.context.Optimizer() != nil {
+		if this.useCBO && !this.indexAdvisor && this.context.Optimizer() != nil {
+			var limit, offset expression.Expression
+			var order *algebra.Order
+			var distinct algebra.ResultTerms
+			if group == nil {
+				if indexPushDowns != nil {
+					// use limit/offset/order from saved info since they
+					// could have been reset in the builder itself
+					limit = indexPushDowns.limit
+					offset = indexPushDowns.offset
+					order = indexPushDowns.order
+				}
+				if projection != nil && (projection.Distinct() || this.setOpDistinct) {
+					distinct = projection.Terms()
+				}
+			}
+
 			optimizer := this.context.Optimizer()
-			optimizer.Initialize(this.Copy())
-			op, err = optimizer.OptimizeQueryBlock(node.From())
+			optimizer.Initialize(this.Copy(), limit, offset, order, distinct)
+			ops, subOps, coveringOps, filter, hasOrder, err = optimizer.OptimizeQueryBlock(node.From())
 			if err != nil {
 				return err
 			}
 		}
 
-		if op != nil {
-			this.addChildren(op)
+		if len(ops) > 0 || len(subOps) > 0 {
+			this.addChildren(ops...)
+			this.addSubChildren(subOps...)
+			this.coveringScans = append(this.coveringScans, coveringOps...)
+			this.filter = filter
+			if hasOrder {
+				this.setBuilderFlag(BUILDER_PLAN_HAS_ORDER)
+			}
 		} else {
 			// Use FROM clause in index selection
 			_, err = node.From().Accept(this)
@@ -292,7 +319,7 @@ func (this *builder) VisitKeyspaceTerm(node *algebra.KeyspaceTerm) (interface{},
 		}
 	}
 
-	if !node.IsAnsiJoinOp() {
+	if !this.joinEnum() && !node.IsAnsiJoinOp() {
 		err = this.processKeyspaceDone(node.Alias())
 		if err != nil {
 			return nil, err
@@ -340,7 +367,7 @@ func (this *builder) VisitSubqueryTerm(node *algebra.SubqueryTerm) (interface{},
 		this.addSubChildren(plan.NewFilter(filter, cost, cardinality, size, frCost))
 	}
 
-	if !node.IsAnsiJoinOp() {
+	if !this.joinEnum() && !node.IsAnsiJoinOp() {
 		err = this.processKeyspaceDone(node.Alias())
 		if err != nil {
 			return nil, err
@@ -379,7 +406,7 @@ func (this *builder) VisitExpressionTerm(node *algebra.ExpressionTerm) (interfac
 	}
 	this.addChildren(plan.NewExpressionScan(node.ExpressionTerm(), node.Alias(), node.IsCorrelated(), filter, cost, cardinality, size, frCost))
 
-	if !node.IsAnsiJoinOp() {
+	if !this.joinEnum() && !node.IsAnsiJoinOp() {
 		err = this.processKeyspaceDone(node.Alias())
 		if err != nil {
 			return nil, err
@@ -504,9 +531,11 @@ func (this *builder) VisitAnsiJoin(node *algebra.AnsiJoin) (interface{}, error) 
 		this.addChildren(join)
 	}
 
-	err = this.processKeyspaceDone(node.Alias())
-	if err != nil {
-		return nil, err
+	if !this.joinEnum() {
+		err = this.processKeyspaceDone(node.Alias())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, nil
@@ -626,9 +655,11 @@ func (this *builder) VisitAnsiNest(node *algebra.AnsiNest) (interface{}, error) 
 		this.addChildren(nest)
 	}
 
-	err = this.processKeyspaceDone(node.Alias())
-	if err != nil {
-		return nil, err
+	if !this.joinEnum() {
+		err = this.processKeyspaceDone(node.Alias())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, nil
@@ -649,36 +680,47 @@ func (this *builder) VisitUnnest(node *algebra.Unnest) (interface{}, error) {
 
 	_, found := this.coveredUnnests[node]
 	if !found {
-		filter, selec, err := this.getFilter(node.Alias(), false, nil)
+		err = this.buildUnnest(node)
 		if err != nil {
 			return nil, err
 		}
-
-		cost := OPT_COST_NOT_AVAIL
-		cardinality := OPT_CARD_NOT_AVAIL
-		size := OPT_SIZE_NOT_AVAIL
-		frCost := OPT_COST_NOT_AVAIL
-		if this.useCBO {
-			baseKeyspace, _ := this.baseKeyspaces[node.Alias()]
-			CombineFilters(baseKeyspace, true)
-			cost, cardinality, size, frCost = getUnnestCost(node, this.lastOp,
-				this.baseKeyspaces, this.keyspaceNames, this.advisorValidate())
-			if (filter != nil) && (cost > 0.0) && (cardinality > 0.0) && (selec > 0.0) &&
-				(size > 0) && (frCost > 0.0) {
-				cost, cardinality, size, frCost = getSimpleFilterCost(node.Alias(),
-					cost, cardinality, selec, size, frCost)
-			}
-		}
-		this.addSubChildren(plan.NewUnnest(node, filter, cost, cardinality, size, frCost))
-		this.addChildren(this.addSubchildrenParallel())
 	}
 
-	err = this.processKeyspaceDone(node.Alias())
-	if err != nil {
-		return nil, err
+	if !this.joinEnum() {
+		err = this.processKeyspaceDone(node.Alias())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, nil
+}
+
+func (this *builder) buildUnnest(node *algebra.Unnest) error {
+	filter, selec, err := this.getFilter(node.Alias(), false, nil)
+	if err != nil {
+		return err
+	}
+
+	cost := OPT_COST_NOT_AVAIL
+	cardinality := OPT_CARD_NOT_AVAIL
+	size := OPT_SIZE_NOT_AVAIL
+	frCost := OPT_COST_NOT_AVAIL
+	if this.useCBO {
+		baseKeyspace, _ := this.baseKeyspaces[node.Alias()]
+		CombineFilters(baseKeyspace, true)
+		cost, cardinality, size, frCost = getUnnestCost(node, this.lastOp,
+			this.baseKeyspaces, this.keyspaceNames, this.advisorValidate())
+		if (filter != nil) && (cost > 0.0) && (cardinality > 0.0) && (selec > 0.0) &&
+			(size > 0) && (frCost > 0.0) {
+			cost, cardinality, size, frCost = getSimpleFilterCost(node.Alias(),
+				cost, cardinality, selec, size, frCost)
+		}
+	}
+	this.addSubChildren(plan.NewUnnest(node, filter, cost, cardinality, size, frCost))
+	this.addChildren(this.addSubchildrenParallel())
+
+	return nil
 }
 
 func (this *builder) fastCount(node *algebra.Subselect) (bool, error) {
@@ -727,7 +769,7 @@ func (this *builder) fastCount(node *algebra.Subselect) (bool, error) {
 		}
 	}
 
-	baseKeyspace := base.NewBaseKeyspace(from.Alias(), from.Path())
+	baseKeyspace := base.NewBaseKeyspace(from.Alias(), from.Path(), from, 1)
 	if this.context.HasDeltaKeyspace(baseKeyspace.Keyspace()) {
 		return false, nil
 	}
